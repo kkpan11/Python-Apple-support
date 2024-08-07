@@ -13,19 +13,24 @@ BUILD_NUMBER=custom
 
 # Version of packages that will be compiled by this meta-package
 # PYTHON_VERSION is the full version number (e.g., 3.10.0b3)
+# PYTHON_PKG_VERSION is the version number with binary package releases to use
+# for macOS binaries. This will be less than PYTHON_VERSION towards the end
+# of a release cycle, as official binaries won't be published.
 # PYTHON_MICRO_VERSION is the full version number, without any alpha/beta/rc suffix. (e.g., 3.10.0)
 # PYTHON_VER is the major/minor version (e.g., 3.10)
-PYTHON_VERSION=3.13.0b4
+PYTHON_VERSION=3.13.0rc1
+PYTHON_PKG_VERSION=$(PYTHON_VERSION)
 PYTHON_MICRO_VERSION=$(shell echo $(PYTHON_VERSION) | grep -Eo "\d+\.\d+\.\d+")
+PYTHON_PKG_MICRO_VERSION=$(shell echo $(PYTHON_PKG_VERSION) | grep -Eo "\d+\.\d+\.\d+")
 PYTHON_VER=$(basename $(PYTHON_VERSION))
 
 # The binary releases of dependencies, published at:
 # https://github.com/beeware/cpython-apple-source-deps/releases
 BZIP2_VERSION=1.0.8-1
+LIBFFI_VERSION=3.4.6-1
 MPDECIMAL_VERSION=4.0.0-1
 OPENSSL_VERSION=3.0.14-1
 XZ_VERSION=5.4.7-1
-LIBFFI_VERSION=3.4.6-1
 
 # Supported OS
 OS_LIST=macOS iOS tvOS watchOS
@@ -96,11 +101,11 @@ downloads/Python-$(PYTHON_VERSION).tar.gz:
 	curl $(CURL_FLAGS) -o $@ \
 		https://www.python.org/ftp/python/$(PYTHON_MICRO_VERSION)/Python-$(PYTHON_VERSION).tgz
 
-downloads/python-$(PYTHON_VERSION)-macos11.pkg:
+downloads/python-$(PYTHON_PKG_VERSION)-macos11.pkg:
 	@echo ">>> Download macOS Python package"
 	mkdir -p downloads
 	curl $(CURL_FLAGS) -o $@ \
-		https://www.python.org/ftp/python/$(PYTHON_MICRO_VERSION)/python-$(PYTHON_VERSION)-macos11.pkg
+		https://www.python.org/ftp/python/$(PYTHON_PKG_MICRO_VERSION)/python-$(PYTHON_PKG_VERSION)-macos11.pkg
 
 ###########################################################################
 # Build for specified target (from $(TARGETS-*))
@@ -124,10 +129,8 @@ ARCH-$(target)=$$(subst .,,$$(suffix $(target)))
 ifneq ($(os),macOS)
 	ifeq ($$(findstring simulator,$$(SDK-$(target))),)
 TARGET_TRIPLE-$(target)=$$(ARCH-$(target))-apple-$$(OS_LOWER-$(target))$$(VERSION_MIN-$(os))
-TARGET_TOOL_TRIPLE-$(target)=$$(ARCH-$(target))-apple-$$(OS_LOWER-$(target))
 	else
 TARGET_TRIPLE-$(target)=$$(ARCH-$(target))-apple-$$(OS_LOWER-$(target))$$(VERSION_MIN-$(os))-simulator
-TARGET_TOOL_TRIPLE-$(target)=$$(ARCH-$(target))-apple-$$(OS_LOWER-$(target))-simulator
 	endif
 endif
 
@@ -260,10 +263,10 @@ PYTHON_STDLIB-$(target)=$$(PYTHON_INSTALL-$(target))/lib/python$(PYTHON_VER)
 $$(PYTHON_SRCDIR-$(target))/configure: \
 		downloads/Python-$(PYTHON_VERSION).tar.gz \
 		$$(BZIP2_LIB-$(target)) \
-		$$(XZ_LIB-$(target)) \
-		$$(OPENSSL_SSL_LIB-$(target)) \
+		$$(LIBFFI_LIB-$(target)) \
 		$$(MPDECIMAL_LIB-$(target)) \
-		$$(LIBFFI_LIB-$(target))
+		$$(OPENSSL_SSL_LIB-$(target)) \
+		$$(XZ_LIB-$(target))
 	@echo ">>> Unpack and configure Python for $(target)"
 	mkdir -p $$(PYTHON_SRCDIR-$(target))
 	tar zxf downloads/Python-$(PYTHON_VERSION).tar.gz --strip-components 1 -C $$(PYTHON_SRCDIR-$(target))
@@ -280,10 +283,6 @@ $$(PYTHON_SRCDIR-$(target))/Makefile: \
 	cd $$(PYTHON_SRCDIR-$(target)) && \
 		PATH="$(PROJECT_DIR)/$$(PYTHON_SRCDIR-$(target))/$(os)/Resources/bin:$(PATH)" \
 		./configure \
-			AR=$$(TARGET_TOOL_TRIPLE-$(target))-ar \
-			CC=$$(TARGET_TOOL_TRIPLE-$(target))-clang \
-			CPP=$$(TARGET_TOOL_TRIPLE-$(target))-cpp \
-			CXX=$$(TARGET_TOOL_TRIPLE-$(target))-clang \
 			LIBLZMA_CFLAGS="-I$$(XZ_INSTALL-$(target))/include" \
 			LIBLZMA_LIBS="-L$$(XZ_INSTALL-$(target))/lib -llzma" \
 			BZIP2_CFLAGS="-I$$(BZIP2_INSTALL-$(target))/include" \
@@ -342,14 +341,14 @@ vars-$(target):
 	@echo "SDK_ROOT-$(target): $$(SDK_ROOT-$(target))"
 	@echo "BZIP2_INSTALL-$(target): $$(BZIP2_INSTALL-$(target))"
 	@echo "BZIP2_LIB-$(target): $$(BZIP2_LIB-$(target))"
-	@echo "XZ_INSTALL-$(target): $$(XZ_INSTALL-$(target))"
-	@echo "XZ_LIB-$(target): $$(XZ_LIB-$(target))"
-	@echo "OPENSSL_INSTALL-$(target): $$(OPENSSL_INSTALL-$(target))"
-	@echo "OPENSSL_SSL_LIB-$(target): $$(OPENSSL_SSL_LIB-$(target))"
-	@echo "MPDECIMAL_INSTALL-$(target): $$(MPDECIMAL_INSTALL-$(target))"
-	@echo "MPDECIMAL_LIB-$(target): $$(MPDECIMAL_LIB-$(target))"
 	@echo "LIBFFI_INSTALL-$(target): $$(LIBFFI_INSTALL-$(target))"
 	@echo "LIBFFI_LIB-$(target): $$(LIBFFI_LIB-$(target))"
+	@echo "MPDECIMAL_INSTALL-$(target): $$(MPDECIMAL_INSTALL-$(target))"
+	@echo "MPDECIMAL_LIB-$(target): $$(MPDECIMAL_LIB-$(target))"
+	@echo "OPENSSL_INSTALL-$(target): $$(OPENSSL_INSTALL-$(target))"
+	@echo "OPENSSL_SSL_LIB-$(target): $$(OPENSSL_SSL_LIB-$(target))"
+	@echo "XZ_INSTALL-$(target): $$(XZ_INSTALL-$(target))"
+	@echo "XZ_LIB-$(target): $$(XZ_LIB-$(target))"
 	@echo "PYTHON_SRCDIR-$(target): $$(PYTHON_SRCDIR-$(target))"
 	@echo "PYTHON_INSTALL-$(target): $$(PYTHON_INSTALL-$(target))"
 	@echo "PYTHON_FRAMEWORK-$(target): $$(PYTHON_FRAMEWORK-$(target))"
@@ -528,7 +527,7 @@ ifeq ($(os),macOS)
 PYTHON_FRAMEWORK-$(os)=$$(PYTHON_INSTALL-$(sdk))/Python.framework
 
 $$(PYTHON_XCFRAMEWORK-$(os))/Info.plist: \
-		downloads/python-$(PYTHON_VERSION)-macos11.pkg
+		downloads/python-$(PYTHON_PKG_VERSION)-macos11.pkg
 	@echo ">>> Repackage macOS package as XCFramework"
 
 	# Unpack .pkg file. It turns out .pkg files are readable by tar... although
@@ -536,11 +535,14 @@ $$(PYTHON_XCFRAMEWORK-$(os))/Info.plist: \
 	# is a tarball that contains additional tarballs; the inner tarball has the
 	# "payload" that is the framework.
 	mkdir -p build/macOS/macosx/python-$(PYTHON_VERSION)
-	tar zxf downloads/python-$(PYTHON_VERSION)-macos11.pkg -C build/macOS/macosx/python-$(PYTHON_VERSION)
+	tar zxf downloads/python-$(PYTHON_PKG_VERSION)-macos11.pkg -C build/macOS/macosx/python-$(PYTHON_VERSION)
 
 	# Unpack payload inside .pkg file
 	mkdir -p $$(PYTHON_FRAMEWORK-macosx)
 	tar zxf build/macOS/macosx/python-$(PYTHON_VERSION)/Python_Framework.pkgPython_Framework.pkg/PayloadPython_Framework.pkgPython_Framework.pkg/PayloadPython_Framework.pkgPython_Framework.pkg/Payload -C $$(PYTHON_FRAMEWORK-macosx) -X patch/Python/release.macOS.exclude
+
+	# Apply the App Store compliance patch
+	patch --strip 2 --directory $$(PYTHON_INSTALL_VERSION-macosx)/lib/python$(PYTHON_VER) --input $(PROJECT_DIR)/patch/Python/app-store-compliance.patch
 
 	# Rewrite the framework to make it standalone
 	patch/make-relocatable.sh $$(PYTHON_INSTALL_VERSION-macosx) 2>&1 > /dev/null
@@ -598,10 +600,10 @@ $$(PYTHON_XCFRAMEWORK-$(os))/Info.plist: \
 	echo "Build: $(BUILD_NUMBER)" >> support/$(PYTHON_VER)/$(os)/VERSIONS
 	echo "Min $(os) version: $$(VERSION_MIN-$(os))" >> support/$(PYTHON_VER)/$(os)/VERSIONS
 	echo "---------------------" >> support/$(PYTHON_VER)/$(os)/VERSIONS
-	echo "libFFI: $(LIBFFI_VERSION)" >> support/$(PYTHON_VER)/$(os)/VERSIONS
 	echo "BZip2: $(BZIP2_VERSION)" >> support/$(PYTHON_VER)/$(os)/VERSIONS
-	echo "OpenSSL: $(OPENSSL_VERSION)" >> support/$(PYTHON_VER)/$(os)/VERSIONS
+	echo "libFFI: $(LIBFFI_VERSION)" >> support/$(PYTHON_VER)/$(os)/VERSIONS
 	echo "mpdecimal: $(MPDECIMAL_VERSION)" >> support/$(PYTHON_VER)/$(os)/VERSIONS
+	echo "OpenSSL: $(OPENSSL_VERSION)" >> support/$(PYTHON_VER)/$(os)/VERSIONS
 	echo "XZ: $(XZ_VERSION)" >> support/$(PYTHON_VER)/$(os)/VERSIONS
 
 dist/Python-$(PYTHON_VER)-$(os)-support.$(BUILD_NUMBER).tar.gz: \
@@ -667,9 +669,10 @@ config:
 	@echo "PYTHON_VER=$(PYTHON_VER)"
 	@echo "BUILD_NUMBER=$(BUILD_NUMBER)"
 	@echo "BZIP2_VERSION=$(BZIP2_VERSION)"
-	@echo "XZ_VERSION=$(XZ_VERSION)"
-	@echo "OPENSSL_VERSION=$(OPENSSL_VERSION)"
 	@echo "LIBFFI_VERSION=$(LIBFFI_VERSION)"
+	@echo "MPDECIMAL_VERSION=$(MPDECIMAL_VERSION)"
+	@echo "OPENSSL_VERSION=$(OPENSSL_VERSION)"
+	@echo "XZ_VERSION=$(XZ_VERSION)"
 
 # Expand cross-platform build and clean targets for each output product
 clean: $(foreach os,$(OS_LIST),clean-$(os))
